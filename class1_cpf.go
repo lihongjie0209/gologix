@@ -17,6 +17,29 @@ type Class1Packet struct {
 	Data              []byte
 }
 
+// Class1ConnectionID validates the demultiplexing prefix of a Class 1 CPF
+// packet and returns its nonzero connection ID. It intentionally does not
+// validate the following Connected Data item.
+func Class1ConnectionID(packet []byte) (uint32, error) {
+	if len(packet) < 14 {
+		return 0, errors.New("Class 1 CPF sequenced address prefix is truncated")
+	}
+	if binary.LittleEndian.Uint16(packet[0:2]) != 2 {
+		return 0, errors.New("Class 1 CPF item count must be two")
+	}
+	if binary.LittleEndian.Uint16(packet[2:4]) != uint16(cipItem_SequenceAddress) {
+		return 0, errors.New("Class 1 CPF first item must be a sequenced address")
+	}
+	if binary.LittleEndian.Uint16(packet[4:6]) != 8 {
+		return 0, errors.New("Class 1 CPF sequenced address length must be eight")
+	}
+	connectionID := binary.LittleEndian.Uint32(packet[6:10])
+	if connectionID == 0 {
+		return 0, errors.New("Class 1 CPF connection ID must be non-zero")
+	}
+	return connectionID, nil
+}
+
 // EncodeClass1CPF encodes Sequenced Address and Connected Data CPF items.
 func EncodeClass1CPF(connectionID, sequence uint32, data []byte, runIdleHeader, run bool) ([]byte, error) {
 	if connectionID == 0 {

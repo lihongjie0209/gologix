@@ -87,3 +87,30 @@ func TestClass1CPFRejectsInvalidInput(t *testing.T) {
 		t.Fatal("accepted oversized expected application data")
 	}
 }
+
+func TestClass1ConnectionIDPrefix(t *testing.T) {
+	packet, err := EncodeClass1CPF(0x11223344, 9, []byte{1}, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	connectionID, err := Class1ConnectionID(packet)
+	if err != nil || connectionID != 0x11223344 {
+		t.Fatalf("connectionID=%08x error=%v", connectionID, err)
+	}
+	// Prefix inspection deliberately does not validate the second item.
+	packet[14] = 0xff
+	if connectionID, err = Class1ConnectionID(packet); err != nil || connectionID != 0x11223344 {
+		t.Fatalf("connectionID=%08x error=%v", connectionID, err)
+	}
+	for _, candidate := range [][]byte{
+		packet[:13],
+		append([]byte{1, 0}, packet[2:]...),
+		append([]byte{2, 0, 1, 0}, packet[4:]...),
+		append([]byte{2, 0, 2, 0, 7, 0}, packet[6:]...),
+		append([]byte{2, 0, 2, 0, 8, 0, 0, 0, 0, 0}, packet[10:]...),
+	} {
+		if _, err := Class1ConnectionID(candidate); err == nil {
+			t.Fatalf("accepted invalid prefix %x", candidate)
+		}
+	}
+}
