@@ -50,6 +50,7 @@ type ForwardOpenResponse struct {
 	TOConnectionID    uint32
 	OTRPIMicroseconds uint32
 	TORPIMicroseconds uint32
+	SocketAddresses   SendRRDataAddresses
 }
 
 func EncodeForwardOpen(request ForwardOpenRequest, route []byte) ([]byte, error) {
