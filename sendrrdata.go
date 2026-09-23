@@ -7,8 +7,6 @@ import (
 	"net"
 )
 
-const encapsulationHeaderSize = 24
-
 // SendRRDataAddresses contains optional originator-to-target and
 // target-to-originator IPv4 Sockaddr Info CPF items.
 type SendRRDataAddresses struct {
@@ -30,7 +28,7 @@ func EncodeSendRRData(session uint32, timeout uint16, context uint64, cip []byte
 	if payloadLength > 65535 {
 		return nil, errors.New("SendRRData CIP payload is too large")
 	}
-	packet := make([]byte, encapsulationHeaderSize+payloadLength)
+	packet := make([]byte, EncapsulationHeaderSize+payloadLength)
 	binary.LittleEndian.PutUint16(packet[0:2], uint16(cipCommandSendRRData))
 	binary.LittleEndian.PutUint16(packet[2:4], uint16(payloadLength))
 	binary.LittleEndian.PutUint32(packet[4:8], session)
@@ -130,29 +128,8 @@ func DecodeSendRRData(packet []byte, session uint32, context uint64) ([]byte, Se
 }
 
 func decodeEncapsulation(packet []byte, command uint16, session uint32, context uint64) ([]byte, error) {
-	if len(packet) < encapsulationHeaderSize {
-		return nil, errors.New("encapsulation header is short")
-	}
-	length := int(binary.LittleEndian.Uint16(packet[2:4]))
-	if length != len(packet)-encapsulationHeaderSize {
-		return nil, fmt.Errorf("encapsulation length %d does not match packet length %d", length, len(packet))
-	}
-	if actual := binary.LittleEndian.Uint16(packet[0:2]); actual != command {
-		return nil, fmt.Errorf("encapsulation command 0x%04x does not match 0x%04x", actual, command)
-	}
-	if actual := binary.LittleEndian.Uint32(packet[4:8]); actual != session {
-		return nil, fmt.Errorf("encapsulation session 0x%08x does not match 0x%08x", actual, session)
-	}
-	if status := binary.LittleEndian.Uint32(packet[8:12]); status != 0 {
-		return nil, fmt.Errorf("encapsulation status 0x%08x", status)
-	}
-	if actual := binary.LittleEndian.Uint64(packet[12:20]); actual != context {
-		return nil, fmt.Errorf("encapsulation context 0x%016x does not match 0x%016x", actual, context)
-	}
-	if options := binary.LittleEndian.Uint32(packet[20:24]); options != 0 {
-		return nil, fmt.Errorf("encapsulation options 0x%08x are unsupported", options)
-	}
-	return packet[encapsulationHeaderSize:], nil
+	_, payload, err := DecodeEncapsulation(packet, command, session, context)
+	return payload, err
 }
 
 func encodeSockaddrInfo(address *net.UDPAddr) ([]byte, error) {
