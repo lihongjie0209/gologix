@@ -177,13 +177,13 @@ func (s *Class1Session) exchangeLocked(ctx context.Context, request []byte) ([]b
 		stop()
 		_ = s.connection.SetDeadline(time.Time{})
 	}()
-	if err := writeFull(s.connection, request); err != nil {
+	if err := WriteEncapsulationFrame(s.connection, request); err != nil {
 		if contextErr := contextIOError(ctx, err, deadline, contextDeadlineSelected); contextErr != nil {
 			return nil, contextErr
 		}
 		return nil, err
 	}
-	response, err := readEncapsulationFrame(s.connection)
+	response, err := ReadEncapsulationFrame(s.connection)
 	if err != nil {
 		if contextErr := contextIOError(ctx, err, deadline, contextDeadlineSelected); contextErr != nil {
 			return nil, contextErr
@@ -204,7 +204,11 @@ func contextIOError(ctx context.Context, ioErr error, deadline time.Time, contex
 	return nil
 }
 
-func writeFull(writer io.Writer, packet []byte) error {
+// WriteEncapsulationFrame writes one already encoded packet completely.
+func WriteEncapsulationFrame(writer io.Writer, packet []byte) error {
+	if writer == nil {
+		return io.ErrClosedPipe
+	}
 	for len(packet) > 0 {
 		written, err := writer.Write(packet)
 		if err != nil {
@@ -218,7 +222,11 @@ func writeFull(writer io.Writer, packet []byte) error {
 	return nil
 }
 
-func readEncapsulationFrame(reader io.Reader) ([]byte, error) {
+// ReadEncapsulationFrame reads one complete bounded encapsulation packet.
+func ReadEncapsulationFrame(reader io.Reader) ([]byte, error) {
+	if reader == nil {
+		return nil, io.ErrClosedPipe
+	}
 	header := make([]byte, EncapsulationHeaderSize)
 	if _, err := io.ReadFull(reader, header); err != nil {
 		return nil, err

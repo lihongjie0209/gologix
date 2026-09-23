@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"io"
 	"net"
 	"testing"
 	"time"
@@ -25,7 +26,7 @@ func TestClass1SessionRegisterOpenClose(t *testing.T) {
 	go func() {
 		defer close(serverErrors)
 		defer func() { _ = server.Close() }()
-		request, err := readEncapsulationFrame(server)
+		request, err := ReadEncapsulationFrame(server)
 		if err != nil {
 			serverErrors <- err
 			return
@@ -41,7 +42,7 @@ func TestClass1SessionRegisterOpenClose(t *testing.T) {
 			return
 		}
 
-		request, err = readEncapsulationFrame(server)
+		request, err = ReadEncapsulationFrame(server)
 		if err != nil {
 			serverErrors <- err
 			return
@@ -62,7 +63,7 @@ func TestClass1SessionRegisterOpenClose(t *testing.T) {
 			return
 		}
 
-		request, err = readEncapsulationFrame(server)
+		request, err = ReadEncapsulationFrame(server)
 		if err != nil {
 			serverErrors <- err
 			return
@@ -127,7 +128,7 @@ func TestClass1SessionCancellationInvalidatesWithoutReplay(t *testing.T) {
 	release := make(chan struct{})
 	go func() {
 		defer func() { _ = server.Close() }()
-		if _, err := readEncapsulationFrame(server); err == nil {
+		if _, err := ReadEncapsulationFrame(server); err == nil {
 			requests <- 1
 			<-release
 		}
@@ -165,4 +166,24 @@ func TestNewClass1SessionValidation(t *testing.T) {
 	if _, err := NewClass1Session(client, 0); err == nil {
 		t.Fatal("accepted nonpositive timeout")
 	}
+}
+
+func TestReadEncapsulationFrameRejectsTruncation(t *testing.T) {
+	header := make([]byte, EncapsulationHeaderSize)
+	binary.LittleEndian.PutUint16(header[2:4], 2)
+	packet := append(header, byte(1))
+	if _, err := ReadEncapsulationFrame(&shortReader{data: packet}); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("error=%v", err)
+	}
+}
+
+type shortReader struct{ data []byte }
+
+func (r *shortReader) Read(buffer []byte) (int, error) {
+	if len(r.data) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(buffer, r.data)
+	r.data = r.data[n:]
+	return n, nil
 }
